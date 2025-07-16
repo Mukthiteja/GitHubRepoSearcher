@@ -7,65 +7,86 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.*;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.client.RestTemplate;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-class GitHubRepoServiceTest {
+public class GitHubRepoServiceTest {
 
     @Mock
     private GitHubRepository gitHubRepository;
 
+    @Mock
+    private RestTemplate restTemplate;
+
     @InjectMocks
-    private GitHubRepoServiceImpl gitHubRepoService;
+    private GitHubRepoServiceImpl gitHubRepoService; // Concrete class for testing
 
     @BeforeEach
-    void setUp() {
+    public void setUp() {
         MockitoAnnotations.openMocks(this);
     }
 
+    // Sample concrete subclass for testing abstract class
     static class GitHubRepoServiceImpl extends GitHubRepoService {
-        public GitHubRepoServiceImpl(GitHubRepository repositoryRepository) {
-            super(repositoryRepository);
-        }
-
-        @Override
-        public ResponseEntity<String> callGitHubApi(String url) {
-            return null; // Not used in this test
+        public GitHubRepoServiceImpl(GitHubRepository repo, RestTemplate restTemplate) {
+            super(repo, restTemplate);
         }
     }
 
     @Test
-    void filterRepos_shouldFilterByLanguageAndStarsAndSort() {
-        RepositoryEntity repo1 = new RepositoryEntity(1L, "Repo1", "desc", "user1", "Java", 100, 50, LocalDateTime.now());
-        RepositoryEntity repo2 = new RepositoryEntity(2L, "Repo2", "desc", "user2", "Python", 200, 30, LocalDateTime.now());
-        RepositoryEntity repo3 = new RepositoryEntity(3L, "Repo3", "desc", "user3", "Java", 50, 70, LocalDateTime.now().minusDays(1));
+    public void testSearchAndStore_validRequest_parsesAndSaves() {
+        // Arrange
+        GitHubSearchRequest request = new GitHubSearchRequest("spring", "java", "stars");
 
-        when(gitHubRepository.findAll()).thenReturn(new ArrayList<>(List.of(repo1, repo2, repo3)));
+        String mockJson = """
+            {
+              "items": [
+                {
+                  "id": 1,
+                  "name": "spring-project",
+                  "description": "test project",
+                  "owner": { "login": "user1" },
+                  "language": "Java",
+                  "stargazers_count": 100,
+                  "forks_count": 10,
+                  "updated_at": "2024-06-01T10:00:00"
+                }
+              ]
+            }
+        """;
 
-        List<RepositoryEntity> filtered = gitHubRepoService.filterRepos("Java", 60, "stars");
+        when(restTemplate.getForEntity(anyString(), eq(String.class)))
+                .thenReturn(ResponseEntity.ok(mockJson));
 
-        assertEquals(1, filtered.size());
-        assertEquals("Repo1", filtered.get(0).getName());
+        when(gitHubRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // Act
+        List<RepositoryEntity> result = gitHubRepoService.searchAndStore(request);
+
+        // Assert
+        assertEquals(1, result.size());
+        assertEquals("spring-project", result.get(0).getName());
+        verify(gitHubRepository, times(1)).save(any());
     }
 
     @Test
-    void filterRepos_shouldReturnAllIfNoFilters() {
-        RepositoryEntity repo1 = new RepositoryEntity(1L, "Repo1", "desc", "user1", "Go", 10, 1, LocalDateTime.now());
+    public void testFilterRepos_filtersByLanguageAndStars() {
+        // Arrange
+        RepositoryEntity repo1 = new RepositoryEntity(1L, "Repo1", "desc", "owner1", "Java", 100, 20, null);
+        RepositoryEntity repo2 = new RepositoryEntity(2L, "Repo2", "desc", "owner2", "Python", 50, 5, null);
+        when(gitHubRepository.findAll()).thenReturn(new ArrayList<>(List.of(repo1, repo2)));
 
-        when(gitHubRepository.findAll()).thenReturn(List.of(repo1));
 
-        List<RepositoryEntity> all = gitHubRepoService.filterRepos(null, null, null);
+        // Act
+        List<RepositoryEntity> result = gitHubRepoService.filterRepos("Java", 60, "stars");
 
-        assertEquals(1, all.size());
-        assertEquals("Repo1", all.get(0).getName());
+        // Assert
+        assertEquals(1, result.size());
+        assertEquals("Repo1", result.get(0).getName());
     }
-
-
-
 }

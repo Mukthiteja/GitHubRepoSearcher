@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
@@ -21,11 +22,12 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public abstract class GitHubRepoService {
+public class GitHubRepoService {
 
     private final GitHubRepository repositoryRepository;
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    @Autowired
+    private final RestTemplate restTemplate;
 
     /**
      * Searches GitHub using public REST API and stores results.
@@ -95,5 +97,5 @@ public abstract class GitHubRepoService {
         return repos;
     }
 
-    public abstract ResponseEntity<String> callGitHubApi(String url);
+
 }
